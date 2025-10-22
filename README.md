@@ -1,37 +1,117 @@
-DevOps Intern — Stage 1 Deployment Script
-This repository contains deploy.sh, a Bash script that automates setting up and deploying a Dockerized application to a remote Linux server.
+# DevOps Intern — Stage 1 Deployment Script
 
-Features
-Interactive prompts for Git repo, PAT, branch, remote SSH details, SSH key, and container port.
-Clones or updates the repository locally (supports branch selection).
-Transfers files to remote server using rsync (or scp fallback).
-Installs Docker, Docker Compose, and Nginx on remote (attempts to use distro package manager or Docker install script).
-Builds and runs containers (supports docker-compose.yml or Dockerfile).
-Configures Nginx as a reverse proxy to the app's internal port.
-Validates deployment with curl.
-Logs all actions to ./logs/deploy_YYYYMMDD_HHMMSS.log.
-Idempotent behavior: stops old containers before redeploy.
---cleanup flag to remove deployed resources.
-Usage
-Make the script executable:
+This repository contains `deploy.sh`, a Bash script that automates the deployment of a Dockerized application to a remote Linux server. It is designed to handle everything from cloning your repository to setting up Docker, Nginx, and verifying that your application is running correctly.
+
+---
+
+## Features
+
+The script provides:
+
+- **Interactive prompts** for essential deployment information:
+  - Git repository URL (HTTPS)
+  - Personal Access Token (for private repositories)
+  - Branch selection (defaults to `main`)
+  - Remote SSH username and host
+  - SSH key path
+  - Application internal container port
+  - Optional remote project directory
+- **Repository management:** Clones or updates your repository locally with branch selection support.
+- **Remote server setup:** Installs Docker, Docker Compose, and Nginx if missing.
+- **Deployment automation:** Builds and runs containers using either `docker-compose.yml` or a `Dockerfile`.
+- **Reverse proxy configuration:** Sets up Nginx to forward traffic to your application.
+- **Deployment validation:** Checks Docker containers, Nginx configuration, and application health.
+- **Logging:** All actions are recorded in `./logs/deploy_YYYYMMDD_HHMMSS.log`.
+- **Idempotency:** Stops old containers before redeploying.
+- **Cleanup:** Remove deployed resources with the `--cleanup` flag.
+
+---
+
+## Prerequisites
+
+### Local Machine
+
+Ensure the following tools are installed:
+
+- `git`
+- `ssh`
+- `rsync`
+- `curl`
+
+### Remote Server
+
+- Ubuntu/Debian or RHEL/CentOS compatible
+- User with `sudo` privileges
+- Port 22 open for SSH connections
+
+---
+
+## Usage
+
+### Make the script executable:
+
+```bash
 chmod +x deploy.sh
 Run interactively:
+bash
+Copy code
 ./deploy.sh
-You'll be prompted for:
+You will be prompted for:
 
-Git repository URL (HTTPS)
-Personal Access Token (hidden input)
-Branch (defaults to main)
+Git repository URL
+
+Personal Access Token (if private)
+
+Branch (default: main)
+
 Remote SSH username
-Remote server IP/hostname
-SSH key path (e.g. ~/.ssh/id_rsa)
-Application internal container port (e.g. 3000)
+
+Remote server IP or hostname
+
+SSH key path (e.g., ~/.ssh/id_rsa)
+
+Application internal container port (e.g., 3000)
+
 Remote project directory (optional)
-To cleanup deployed resources:
+
+Cleanup deployed resources:
+bash
+Copy code
 ./deploy.sh --cleanup
+Deployment Workflow
+Checks local prerequisites (git, ssh, rsync, curl).
+
+Clones or updates your repository.
+
+Verifies SSH connectivity to the remote server.
+
+Installs Docker, Docker Compose, and Nginx if missing.
+
+Transfers project files to the remote server.
+
+Builds and runs Docker containers.
+
+Configures Nginx reverse proxy with SSL placeholder.
+
+Validates deployment and application health.
+
+Logs all actions for auditing and debugging.
+
 Notes & Limitations
-The script attempts to support both Debian/Ubuntu (apt) and RHEL/CentOS (yum) based systems. It uses the official Docker installation script when necessary.
-You must supply a PAT if the repo is private. The PAT is used to clone the repo over HTTPS; it is not stored by the script beyond the git clone operation.
-For production use, consider adding proper TLS (Certbot + Let's Encrypt) and hardened Nginx config. This script creates a simple config that listens on port 80.
-The script assumes the remote user can use sudo without interactive password prompts for some operations. If sudo requires a password, the script may fail unless you adapt it.
-This is intended as a starting point — extend and secure as needed.
+For production, add proper TLS/SSL using Certbot or Let’s Encrypt.
+
+The script assumes the remote user can run sudo commands without interactive password prompts.
+
+A default Node.js Dockerfile is generated if none is provided. You can replace it with your own Dockerfile.
+
+Logs are stored in ./logs/ for reference and troubleshooting.
+
+Example Log Output
+text
+Copy code
+INFO: Connecting to 192.168.1.100...
+SUCCESS: SSH connectivity OK
+INFO: Installing Docker...
+SUCCESS: Docker installation verified
+INFO: Deploying application on remote host...
+SUCCESS: Deployment completed successfully! 
