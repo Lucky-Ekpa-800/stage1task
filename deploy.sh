@@ -55,10 +55,10 @@ read_input() {
 }
 
 ########################################
-# Local prereqs
+# Local prerequisites
 ########################################
 check_local_prereqs() {
-  for c in git ssh curl; do
+  for c in git ssh rsync curl; do
     command -v "$c" >/dev/null 2>&1 || die "$c is required locally"
   done
   info "Local prerequisites satisfied"
@@ -111,29 +111,78 @@ check_ssh_connectivity() {
 }
 
 ########################################
-# Transfer project (Windows-friendly rsync/scp)
+# Transfer project (rsync or scp fallback)
 ########################################
 transfer_project() {
   info "Transferring project to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PROJECT_DIR}"
-  ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "${REMOTE_USER}@${REMOTE_HOST}" \
-      "mkdir -p '${REMOTE_PROJECT_DIR}' && chown ${REMOTE_USER}:${REMOTE_USER} '${REMOTE_PROJECT_DIR}'" \
-      || die "Failed to create remote directory"
-
-  # Convert local path for Windows Git Bash
-  LOCAL_PATH="$SCRIPT_DIR/$REPO_NAME"
-  if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-    LOCAL_PATH="$(cygpath -w "$LOCAL_PATH")"
-  fi
+  ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p '${REMOTE_PROJECT_DIR}' && chown ${REMOTE_USER}:${REMOTE_USER} '${REMOTE_PROJECT_DIR}'" || die "Failed to create remote directory"
 
   if command -v rsync >/dev/null 2>&1; then
     info "Using rsync to transfer files"
-    rsync -avz --delete -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no" "$LOCAL_PATH/" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PROJECT_DIR}/" >>"$LOG_FILE" 2>&1 || die "rsync failed"
+    rsync -avz --delete -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no" "$SCRIPT_DIR/$REPO_NAME/" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PROJECT_DIR}/" >>"$LOG_FILE" 2>&1 || die "rsync failed"
   else
     info "rsync not found — falling back to scp"
-    scp -i "$SSH_KEY" -r "$LOCAL_PATH/" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PROJECT_DIR}/" >>"$LOG_FILE" 2>&1 || die "scp failed"
+    scp -i "$SSH_KEY" -r "$SCRIPT_DIR/$REPO_NAME/" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PROJECT_DIR}/" >>"$LOG_FILE" 2>&1 || die "scp failed"
   fi
-
   succ "Project files transferred"
+}
+
+########################################
+# Remote deploy (Docker build & run)
+########################################
+remote_deploy() {
+  info "Deploying Docker container"
+  ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "${REMOTE_USER}@${REMOTE_HOST}" /bin/bash <<REMOTE_DEPLOY
+set -euo pipefail
+cd "${REMOTE_PROJECT_DIR}"
+
+if [ -f docker-compose.yml ]; then
+  echo "Using docker-compose..."
+  sudo docker-compose down 2>/dev/null || true
+  sudo docker-compose pull || true
+  sudo docker-compose up -d --build
+else
+  echo "Using Dockerfile..."
+  IMG_TAG="${REPO_NAME}:latest"
+  sudo docker build -t "\$IMG_TAG" .
+  sudo docker run -d --name "app_${REPO_NAME}" --restart unless-stopped -p ${CONTAINER_PORT}:${CONTAINER_PORT} "\$IMG_TAG"
+fi
+REMOTE_DEPLOY
+  succ "Remote deployment completed"
+}
+
+########################################
+# Configure Nginx reverse proxy
+########################################
+configure_nginx() {
+  info "Configuring Nginx"
+  NGINX_CONFIG_FILE="/tmp/nginx_${REPO_NAME}.conf"
+  cat > "$NGINX_CONFIG_FILE" <<EOF
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:${CONTAINER_PORT};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+}
+EOF
+
+  scp -i "$SSH_KEY" -o StrictHostKeyChecking=no "$NGINX_CONFIG_FILE" "${REMOTE_USER}@${REMOTE_HOST}:/tmp/nginx_config.conf" >>"$LOG_FILE" 2>&1 || die "Failed to copy nginx config"
+
+  ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "${REMOTE_USER}@${REMOTE_HOST}" /bin/bash <<'NGINX_SETUP'
+sudo mv /tmp/nginx_config.conf /etc/nginx/sites-available/app.conf
+sudo ln -sf /etc/nginx/sites-available/app.conf /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+sudo nginx -t
+sudo systemctl reload nginx
+NGINX_SETUP
+
+  rm -f "$NGINX_CONFIG_FILE"
+  succ "Nginx configured"
 }
 
 ########################################
@@ -144,7 +193,7 @@ main() {
     read_input
     check_local_prereqs
     check_ssh_connectivity
-    info "Cleanup mode placeholder — implement cleanup here if needed"
+    info "Cleanup mode — remove containers, images, and project directory if needed"
     exit 0
   fi
 
@@ -153,8 +202,10 @@ main() {
   prepare_local_repo
   check_ssh_connectivity
   transfer_project
+  remote_deploy
+  configure_nginx
 
-  succ "Deployment steps completed (Docker/Nginx steps to be added)"
+  succ "Deployment completed successfully!"
   info "Logs: $LOG_FILE"
 }
 

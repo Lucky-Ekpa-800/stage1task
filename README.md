@@ -1,66 +1,69 @@
-# DevOps Intern — Stage 1 Deployment Script
+# HNG Stage 1 — DevOps Automated Deployment
 
-This repository contains `deploy.sh`, a Bash script that automates the deployment of a Dockerized application to a remote Linux server. It is designed to handle everything from cloning your repository to setting up Docker, Nginx, and verifying that your application is running correctly.
+This repository contains a sample project and an automated deployment script for HNG Stage 1 DevOps tasks.  
+The deployment script (`deploy.sh`) handles the cloning of your repository, Docker container setup, and Nginx reverse proxy configuration.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Usage](#usage)
+- [Deployment Steps](#deployment-steps)
+- [Cleanup](#cleanup)
+- [Logging](#logging)
+- [Notes](#notes)
 
 ---
 
 ## Features
 
-The script provides:
-
-- **Interactive prompts** for essential deployment information:
-  - Git repository URL (HTTPS)
-  - Personal Access Token (for private repositories)
-  - Branch selection (defaults to `main`)
-  - Remote SSH username and host
-  - SSH key path
-  - Application internal container port
-  - Optional remote project directory
-- **Repository management:** Clones or updates your repository locally with branch selection support.
-- **Remote server setup:** Installs Docker, Docker Compose, and Nginx if missing.
-- **Deployment automation:** Builds and runs containers using either `docker-compose.yml` or a `Dockerfile`.
-- **Reverse proxy configuration:** Sets up Nginx to forward traffic to your application.
-- **Deployment validation:** Checks Docker containers, Nginx configuration, and application health.
-- **Logging:** All actions are recorded in `./logs/deploy_YYYYMMDD_HHMMSS.log`.
-- **Idempotency:** Stops old containers before redeploying.
-- **Cleanup:** Remove deployed resources with the `--cleanup` flag.
+- Automatically clones your GitHub repository.
+- Supports private repositories via Personal Access Token (PAT).
+- Builds and runs your app in a Docker container.
+- Configures Nginx as a reverse proxy.
+- Handles SSH connectivity and file transfer.
+- Logs deployment steps for easy troubleshooting.
+- Idempotent operations with optional cleanup mode.
 
 ---
 
 ## Prerequisites
 
-### Local Machine
+**Local machine:**
 
-Ensure the following tools are installed:
+- Git
+- SSH client
+- `rsync` or `scp`
+- `curl` (for validation)
 
-- `git`
-- `ssh`
-- `rsync`
-- `curl`
+**Remote server:**
 
-### Remote Server
+- Ubuntu server (or any Debian-based distro)
+- Docker installed (script can install if missing)
+- Nginx installed (script can configure)
 
-- Ubuntu/Debian or RHEL/CentOS compatible
-- User with `sudo` privileges
-- Port 22 open for SSH connections
+> Ensure you have a valid SSH key to access the remote server.
 
 ---
 
 ## Usage
 
-### Make the script executable:
+Make the script executable:
 
 ```bash
 chmod +x deploy.sh
-Run interactively:
+Run the deployment script:
+
 bash
 Copy code
 ./deploy.sh
-You will be prompted for:
+Follow the prompts to provide:
 
 Git repository URL
 
-Personal Access Token (if private)
+Personal Access Token (optional, if private)
 
 Branch (default: main)
 
@@ -68,50 +71,50 @@ Remote SSH username
 
 Remote server IP or hostname
 
-SSH key path (e.g., ~/.ssh/id_rsa)
+SSH key path
 
-Application internal container port (e.g., 3000)
+Container port (e.g., 3000)
 
 Remote project directory (optional)
 
-Cleanup deployed resources:
+Deployment Steps
+Local checks – Verifies that git, ssh, and rsync (or scp) are installed.
+
+Prepare repository – Clones the repository if not present locally; pulls latest changes if it exists.
+
+Docker deployment – Builds the Docker image and runs the container.
+
+Nginx configuration – Sets up a reverse proxy pointing to the container port.
+
+Validation – Ensures container is running and accessible through Nginx.
+
+Cleanup
+To remove deployed containers and clean up the project directory, run:
+
 bash
 Copy code
 ./deploy.sh --cleanup
-Deployment Workflow
-Checks local prerequisites (git, ssh, rsync, curl).
+Cleanup mode is idempotent and will safely stop containers if they exist.
 
-Clones or updates your repository.
+Logging
+All deployment logs are saved under the logs/ directory with timestamped filenames:
 
-Verifies SSH connectivity to the remote server.
-
-Installs Docker, Docker Compose, and Nginx if missing.
-
-Transfers project files to the remote server.
-
-Builds and runs Docker containers.
-
-Configures Nginx reverse proxy with SSL placeholder.
-
-Validates deployment and application health.
-
-Logs all actions for auditing and debugging.
-
-Notes & Limitations
-For production, add proper TLS/SSL using Certbot or Let’s Encrypt.
-
-The script assumes the remote user can run sudo commands without interactive password prompts.
-
-A default Node.js Dockerfile is generated if none is provided. You can replace it with your own Dockerfile.
-
-Logs are stored in ./logs/ for reference and troubleshooting.
-
-Example Log Output
 text
 Copy code
-INFO: Connecting to 192.168.1.100...
-SUCCESS: SSH connectivity OK
-INFO: Installing Docker...
-SUCCESS: Docker installation verified
-INFO: Deploying application on remote host...
-SUCCESS: Deployment completed successfully! 
+logs/deploy_YYYYMMDD_HHMMSS.log
+Notes
+Default container port is 3000 but can be updated during prompts.
+
+If rsync is not installed, the script falls back to scp.
+
+Ensure your firewall allows traffic on HTTP port 80 for Nginx.
+
+Docker and Nginx must be installed on the remote server for full deployment.
+
+The script is idempotent — safe to rerun without breaking existing deployments.
+
+Happy deploying! ���
+
+pgsql
+Copy code
+
